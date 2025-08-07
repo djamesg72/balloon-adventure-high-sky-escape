@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balloon Game Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: linear-gradient(to bottom, #87CEEB, #E0F6FF);
+        }
+        #gameContainer {
+            width: 800px;
+            height: 600px;
+            margin: 20px auto;
+            border: 2px solid #333;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .instructions {
+            max-width: 800px;
+            margin: 0 auto;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="instructions">
+        <h1>🎈 Balloon Adventure Test</h1>
+        <p>Click anywhere to start the game. Use the "LAND NOW" button to safely land before the balloon pops!</p>
+    </div>
+    <div id="gameContainer"></div>
+
+    <script type="module">
+        import { BalloonGame } from '/src/game/BalloonGame.ts'
+        
+        const container = document.getElementById('gameContainer')
+        const game = new BalloonGame(container)
+        
+        // Add some debug logging
+        game.onGameStateChange = (state) => {
+            console.log('Game state changed to:', state)
+        }
+        
+        game.onScoreUpdate = (score, multiplier) => {
+            console.log('Score:', score, 'Multiplier:', multiplier)
+        }
+        
+        game.onLand = (finalScore) => {
+            console.log('Landed safely! Final score:', finalScore)
+        }
+        
+        game.onCrash = (finalScore) => {
+            console.log('Crashed! Final score:', finalScore)
+        }
+        
+        console.log('Balloon game initialized successfully!')
+    </script>
+</body>
+</html>
