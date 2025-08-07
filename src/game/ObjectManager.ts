@@ -30,7 +30,7 @@ export class ObjectManager {
 
   spawnObjectsByAltitude(multiplier: number, cameraY: number, config: any): void {
     // Only spawn occasionally to avoid too many objects
-    if (Math.random() > 0.02) return // 2% chance per frame
+    if (Math.random() > 0.05) return // 5% chance per frame
     
     const spawnY = cameraY - 100 // Spawn above camera view
     let newObject: PIXI.Container | null = null

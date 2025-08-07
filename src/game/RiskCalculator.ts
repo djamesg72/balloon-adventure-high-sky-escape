@@ -12,9 +12,15 @@ export class RiskCalculator {
   }
 
   static calculateMultiplier(elapsedTimeMs: number): number {
-    // Geometric multiplier growth: 1.01^(time_in_seconds)
-    const timeInSeconds = elapsedTimeMs / 1000
-    return Math.pow(1.01, timeInSeconds)
+    // Simple arithmetic progression: +0.01 each step
+    const timeInSeconds = elapsedTimeMs / 500; // Convert to seconds
+    const stepsPerSecond = 1 + elapsedTimeMs / 1000; // How many steps per second (controls speed)
+    const incrementPerStep = 0.01; // Exactly 0.01 increase per step
+    
+    const totalSteps = Math.floor(timeInSeconds * stepsPerSecond);
+    const totalMultiplier = 1.0 + (totalSteps * incrementPerStep);
+    
+    return totalMultiplier;
   }
 
   static shouldCrash(multiplier: number): boolean {

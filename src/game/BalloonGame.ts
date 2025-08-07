@@ -16,6 +16,8 @@ export class BalloonGame {
   private balloon!: PIXI.Container
   private ui!: PIXI.Container
   
+  private hasLanded: boolean = false
+  
   // Game variables
   private score: number = 0
   private startTime: number = 0
@@ -177,16 +179,38 @@ export class BalloonGame {
 
     this.gameState = GameState.PLAYING
     this.startTime = Date.now()
+    this.hasLanded = false // Reset for new round
 
     this.onGameStateChange?.(this.gameState)
   }
 
-  public landBalloon(): void {
-    this.gameState = GameState.LANDED
-    const finalScore = Math.floor(this.score * this.currentMultiplier)
+  public restartGame(): void {
+    // Reset all game variables to initial state
+    this.score = 0
+    this.currentMultiplier = 1
+    this.hasLanded = false
+    this.gameState = GameState.WAITING
+    this.startTime = 0 // Reset start time
     
-    this.onGameStateChange?.(this.gameState)
+    // Reset balloon position
+    this.balloonController.resetPosition()
+    
+    // Reset object manager
+    this.objectManager.clearAllObjects()
+    
+    // Reset camera
+    this.cameraController.reset()
+  }
+
+  public landBalloon(): void {
+    // Don't change game state - just record the score and continue playing
+    const finalScore = Math.floor(this.score * this.currentMultiplier)
+    this.hasLanded = true
+    
+    // Call the land callback but keep the game running
     this.onLand?.(finalScore)
+    
+    // Game continues running until crash
   }
 
   private gameLoop(delta: number): void {
@@ -195,7 +219,7 @@ export class BalloonGame {
     
     if (this.gameState === GameState.PLAYING) {
       const currentTime = Date.now()
-      const elapsedTime = currentTime - this.startTime
+      const elapsedTime = currentTime - this.startTime;
 
       // Update balloon position
       this.balloonController.updatePosition(delta, true)
@@ -247,13 +271,17 @@ export class BalloonGame {
     this.balloonController.createCrashEffect(this.backgroundRenderer.getContainer())
     
     this.onGameStateChange?.(this.gameState)
-    this.onCrash?.(0) // No points on crash
+    
+    // If player landed before crashing, they keep their score; otherwise 0
+    const finalScore = this.hasLanded ? Math.floor(this.score * this.currentMultiplier) : 0
+    this.onCrash?.(finalScore)
   }
 
   public resetGame(): void {
     this.gameState = GameState.WAITING
     this.score = 0
     this.currentMultiplier = 1
+    this.hasLanded = false
     
     // Reset balloon position and controller
     this.balloonController.resetPosition()
