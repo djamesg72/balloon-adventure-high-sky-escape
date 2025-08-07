@@ -45,7 +45,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, type Ref } from 'vue'
-import { BalloonGame, GameState } from '../game/BalloonGame'
+import { BalloonGame } from '../game/BalloonGame'
+import { GameState } from '../game/GameTypes'
 
 // Reactive state
 const gameContainer: Ref<HTMLElement | undefined> = ref<HTMLElement>()
@@ -99,7 +100,11 @@ const initializeGame = (): void => {
   if (!gameContainer.value) return
   
   try {
-    game = new BalloonGame(gameContainer.value)
+    // Create canvas element for PixiJS
+    const canvas = document.createElement('canvas')
+    gameContainer.value.appendChild(canvas)
+    
+    game = new BalloonGame(canvas)
     
     // Setup event handlers
     game.onGameStateChange = (state: GameState) => {
@@ -155,7 +160,7 @@ const landNow = (): void => {
 
 const resetGame = (): void => {
   if (game) {
-    game.resetGame()
+    game.restartGame()
   }
   currentScore.value = 0
   currentMultiplier.value = 1

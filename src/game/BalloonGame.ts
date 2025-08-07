@@ -1,0 +1,292 @@
+import * as PIXI from 'pixi.js'
+import { GameState, GameConfig, GameCallbacks } from './GameTypes'
+import { ObjectFactory } from './ObjectFactory'
+import { BackgroundRenderer } from './BackgroundRenderer'
+import { RiskCalculator } from './RiskCalculator'
+import { ObjectManager } from './ObjectManager'
+import { BalloonController } from './BalloonController'
+import { CameraController } from './CameraController'
+
+// Re-export for backward compatibility
+export { GameState } from './GameTypes'
+
+export class BalloonGame {
+  private app: PIXI.Application
+  private gameState: GameState = GameState.WAITING
+  private balloon!: PIXI.Container
+  private ui!: PIXI.Container
+  
+  // Game variables
+  private score: number = 0
+  private startTime: number = 0
+  private currentMultiplier: number = 1
+
+  // Game modules
+  private backgroundRenderer!: BackgroundRenderer
+  private objectManager!: ObjectManager
+  private balloonController!: BalloonController
+  private cameraController!: CameraController
+
+  // Configuration
+  private config: GameConfig = {
+    width: 800,
+    height: 600,
+    balloon: {
+      radius: 40,
+      initialY: 450,
+      speed: 1,
+      maxSpeed: 5,
+      acceleration: 0.02,
+      swayAmplitude: 20,
+      swaySpeed: 0.02
+    },
+    risk: {
+      minSafeTime: 3000, // 3 seconds minimum
+      maxTime: 30000, // 30 seconds maximum
+      baseRiskMultiplier: 1.5
+    },
+    scoring: {
+      pointsPerSecond: 10,
+      heightMultiplier: 0.1
+    }
+  }
+
+  // Event callbacks
+  public onScoreUpdate?: (score: number, multiplier: number) => void
+  public onGameStateChange?: (state: GameState) => void
+  public onCrash?: (finalScore: number) => void
+  public onLand?: (finalScore: number) => void
+
+  constructor(canvasElement: HTMLCanvasElement) {
+    // Get initial screen dimensions
+    const screenWidth = window.innerWidth
+    const screenHeight = window.innerHeight
+    
+    // Create PIXI application with fullscreen dimensions
+    this.app = new PIXI.Application({
+      view: canvasElement,
+      width: screenWidth,
+      height: screenHeight,
+      backgroundColor: 0x1a1a2e, // Dark blue night sky
+      antialias: true,
+      resolution: window.devicePixelRatio || 1
+    })
+
+    // Update config to match screen size
+    this.config.width = screenWidth
+    this.config.height = screenHeight
+    this.config.balloon.initialY = screenHeight - 150 // Position balloon near bottom
+
+    // Setup responsive canvas
+    this.setupResponsiveCanvas()
+
+    // Initialize game modules
+    this.initializeBackground()
+    this.initializeUI()
+    this.initializeBalloon()
+    this.initializeObjects()
+
+    // Setup game loop
+    this.app.ticker.add(this.gameLoop, this)
+
+    // Setup interactions
+    this.setupInteractions()
+
+    // Initial state
+    this.resetGame()
+  }
+
+  private initializeBackground(): void {
+    this.backgroundRenderer = new BackgroundRenderer()
+    this.app.stage.addChild(this.backgroundRenderer.getContainer())
+  }
+
+  private initializeBalloon(): void {
+    this.balloon = ObjectFactory.createBalloon()
+    this.balloon.x = this.config.width / 2
+    this.balloon.y = this.config.balloon.initialY
+    this.app.stage.addChild(this.balloon)
+    
+    this.balloonController = new BalloonController(this.balloon, this.config)
+  }
+
+  private initializeObjects(): void {
+    this.objectManager = new ObjectManager(this.backgroundRenderer.getContainer())
+    this.objectManager.initializeObjects(this.config)
+  }
+
+  private initializeUI(): void {
+    this.ui = new PIXI.Container()
+    this.app.stage.addChild(this.ui)
+  }
+
+  private setupResponsiveCanvas(): void {
+    this.cameraController = new CameraController(this.app.stage)
+    
+    const resize = () => {
+      const newWidth = window.innerWidth
+      const newHeight = window.innerHeight
+      
+      // Update config dimensions
+      this.config.width = newWidth
+      this.config.height = newHeight
+      
+      // Resize the PIXI application
+      this.app.renderer.resize(newWidth, newHeight)
+      
+      // Update background gradient for new dimensions
+      if (this.backgroundRenderer) {
+        this.backgroundRenderer.updateGradient(this.currentMultiplier, this.config.balloon.initialY, this.config.width)
+      }
+      
+      // Reposition balloon to center of new dimensions
+      if (this.balloon) {
+        this.balloon.x = newWidth / 2
+        this.config.balloon.initialY = newHeight - 150
+        if (this.gameState === GameState.WAITING) {
+          this.balloon.y = this.config.balloon.initialY
+        }
+      }
+      
+      // Redistribute objects for new screen size
+      if (this.objectManager) {
+        this.objectManager.redistributeObjects(this.config, this.cameraController.getCameraY())
+      }
+    }
+
+    window.addEventListener('resize', resize)
+    resize() // Call once to set initial size
+  }
+
+  private setupInteractions(): void {
+    // Touch/click to start game
+    this.app.stage.interactive = true
+    this.app.stage.on('pointerdown', (event: any) => {
+      if (this.gameState === GameState.WAITING && event.target === this.app.stage) {
+        this.startGame()
+      }
+    })
+  }
+
+  private updateUI(): void {
+    // No UI elements to update in canvas
+  }
+
+  public startGame(): void {
+    if (this.gameState !== GameState.WAITING) return
+
+    this.gameState = GameState.PLAYING
+    this.startTime = Date.now()
+
+    this.onGameStateChange?.(this.gameState)
+  }
+
+  public landBalloon(): void {
+    this.gameState = GameState.LANDED
+    const finalScore = Math.floor(this.score * this.currentMultiplier)
+    
+    this.onGameStateChange?.(this.gameState)
+    this.onLand?.(finalScore)
+  }
+
+  private gameLoop(delta: number): void {
+    // Always update background
+    this.backgroundRenderer.updateGradient(this.currentMultiplier, this.config.balloon.initialY, this.config.width)
+    
+    if (this.gameState === GameState.PLAYING) {
+      const currentTime = Date.now()
+      const elapsedTime = currentTime - this.startTime
+
+      // Update balloon position
+      this.balloonController.updatePosition(delta, true)
+
+      // Update camera to follow balloon
+      const balloonPos = this.balloonController.getBalloonPosition()
+      this.cameraController.update(balloonPos.y, this.config.height)
+
+      // Update score and multiplier with geometric expansion
+      const timeBonus = elapsedTime / 1000 * this.config.scoring.pointsPerSecond
+      this.score = Math.floor(timeBonus)
+      
+      // Geometric multiplier growth: 1.01^(time_in_seconds)
+      this.currentMultiplier = RiskCalculator.calculateMultiplier(elapsedTime)
+
+      // Risk-based crash system - higher multiplier = higher crash risk
+      if (RiskCalculator.shouldCrash(this.currentMultiplier)) {
+        this.crashBalloon()
+        return
+      }
+
+      // Dynamic object spawning based on altitude
+      this.objectManager.spawnObjectsByAltitude(this.currentMultiplier, this.cameraController.getCameraY(), this.config)
+
+      // Update risk indicator (balloon color changes) 
+      this.balloonController.updateRiskVisual(this.currentMultiplier)
+
+      // Move objects (parallax effect)
+      this.objectManager.updateObjects(delta, this.cameraController.getCameraY(), this.config)
+
+      // Update UI
+      this.updateUI()
+
+      // Trigger callbacks
+      this.onScoreUpdate?.(this.score, this.currentMultiplier)
+    } else {
+      // When waiting, ensure multiplier is reset to 1
+      this.currentMultiplier = 1
+      
+      // When waiting, add a gentle sway to the balloon
+      this.balloonController.updatePosition(delta, false)
+    }
+  }
+
+  private crashBalloon(): void {
+    this.gameState = GameState.CRASHED
+    
+    // Create crash animation (balloon pop effect)
+    this.balloonController.createCrashEffect(this.backgroundRenderer.getContainer())
+    
+    this.onGameStateChange?.(this.gameState)
+    this.onCrash?.(0) // No points on crash
+  }
+
+  public resetGame(): void {
+    this.gameState = GameState.WAITING
+    this.score = 0
+    this.currentMultiplier = 1
+    
+    // Reset balloon position and controller
+    this.balloonController.resetPosition()
+    
+    // Reset camera position
+    this.cameraController.reset()
+    
+    // Clear all existing objects and start fresh with only clouds
+    this.objectManager.clearAllObjects()
+    this.objectManager.initializeObjects(this.config)
+    
+    // Reset background to initial colors
+    this.backgroundRenderer.updateGradient(this.currentMultiplier, this.config.balloon.initialY, this.config.width)
+    
+    // Update UI
+    this.updateUI()
+    
+    this.onGameStateChange?.(this.gameState)
+  }
+
+  public destroy(): void {
+    this.app.destroy(true, true)
+  }
+
+  public getGameState(): GameState {
+    return this.gameState
+  }
+
+  public getCurrentScore(): number {
+    return this.score
+  }
+
+  public getCurrentMultiplier(): number {
+    return this.currentMultiplier
+  }
+}
