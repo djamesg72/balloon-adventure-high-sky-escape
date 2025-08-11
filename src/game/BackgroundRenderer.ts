@@ -17,13 +17,13 @@ export class BackgroundRenderer {
     const y = balloonInitialY
     const w = width
     
-    // Color lookup table for performance
+    // Color lookup table for performance - changed to blue sky colors
     const colors = [
-      [0xFF6B35, 0xFF8E53, 0x87CEEB], // Low altitude
-      [0xFF8E53, 0xFFB87A, 0x6495ED], // Mid altitude
-      [0xFFB87A, 0x87CEEB, 0x4682B4], // High altitude
-      [0x87CEEB, 0x6495ED, 0x2C3E50], // Higher altitude
-      [0x6495ED, 0x4682B4, 0x000000]  // Space
+      [0x87CEEB, 0x6495ED, 0x4682B4], // Low altitude - sky blue tones
+      [0x6495ED, 0x4682B4, 0x2F4F4F], // Mid altitude - deeper blues
+      [0x4682B4, 0x2F4F4F, 0x191970], // High altitude - dark blue
+      [0x2F4F4F, 0x191970, 0x000080], // Higher altitude - midnight blue
+      [0x191970, 0x000080, 0x000000]  // Space - navy to black
     ]
     
     const colorIndex = Math.min(Math.floor(m / 5), 4)

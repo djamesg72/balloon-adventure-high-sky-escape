@@ -60,42 +60,57 @@ export class BalloonGame {
   public onLand?: (finalScore: number) => void
 
   constructor(canvasElement: HTMLCanvasElement) {
-    // Get initial screen dimensions
-    const screenWidth = window.innerWidth
-    const screenHeight = window.innerHeight
-    
-    // Create PIXI application with fullscreen dimensions
-    this.app = new PIXI.Application({
-      view: canvasElement,
-      width: screenWidth,
-      height: screenHeight,
-      backgroundColor: 0x1a1a2e, // Dark blue night sky
-      antialias: true,
-      resolution: window.devicePixelRatio || 1
-    })
+    try {
+      console.log('Starting BalloonGame initialization...')
+      
+      // Get initial screen dimensions
+      const screenWidth = window.innerWidth
+      const screenHeight = window.innerHeight
+      
+      console.log(`Screen dimensions: ${screenWidth}x${screenHeight}`)
+      
+      // Create PIXI application with fullscreen dimensions
+      this.app = new PIXI.Application({
+        view: canvasElement,
+        width: screenWidth,
+        height: screenHeight,
+        backgroundColor: 0x1a1a2e, // Dark blue night sky
+        antialias: true,
+        resolution: window.devicePixelRatio || 1
+      })
 
-    // Update config to match screen size
-    this.config.width = screenWidth
-    this.config.height = screenHeight
-    this.config.balloon.initialY = screenHeight - 150 // Position balloon near bottom
+      console.log('PIXI Application created successfully')
 
-    // Setup responsive canvas
-    this.setupResponsiveCanvas()
+      // Update config to match screen size
+      this.config.width = screenWidth
+      this.config.height = screenHeight
+      this.config.balloon.initialY = screenHeight - 150 // Position balloon near bottom
 
-    // Initialize game modules
-    this.initializeBackground()
-    this.initializeUI()
-    this.initializeBalloon()
-    this.initializeObjects()
+      // Setup responsive canvas
+      this.setupResponsiveCanvas()
 
-    // Setup game loop
-    this.app.ticker.add(this.gameLoop, this)
+      // Initialize game modules
+      console.log('Initializing game modules...')
+      this.initializeBackground()
+      this.initializeUI()
+      this.initializeBalloon()
+      this.initializeObjects()
 
-    // Setup interactions
-    this.setupInteractions()
+      // Setup game loop
+      this.app.ticker.add(this.gameLoop, this)
+      console.log('Game loop started')
 
-    // Initial state
-    this.resetGame()
+      // Setup interactions
+      this.setupInteractions()
+
+      // Initial state
+      this.resetGame()
+      
+      console.log('BalloonGame initialization completed successfully')
+    } catch (error) {
+      console.error('Fatal error during BalloonGame initialization:', error)
+      throw new Error(`Failed to initialize BalloonGame: ${error instanceof Error ? error.message : String(error)}`)
+    }
   }
 
   private initializeBackground(): void {

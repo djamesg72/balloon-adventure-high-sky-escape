@@ -1,276 +1,307 @@
 /**
  * Audio Manager for Balloon Adventure Game
- * Handles sound effects and background music
+ * Uses real audio files instead of generated frequencies
  */
 
 export interface AudioOptions {
   volume?: number
   loop?: boolean
-  playbackRate?: number
 }
 
 export class AudioManager {
   private sounds: Map<string, HTMLAudioElement> = new Map()
   private masterVolume: number = 1.0
   private muted: boolean = false
+  private windSound: HTMLAudioElement | null = null
+  private audioUnlocked: boolean = false
+
+  private soundFiles = [
+    'pop.mp3',      // Balloon pop/hit sound
+    'wind.mp3',     // Wind background sound
+    'start.mp3',    // Game start sound
+    'countdown.mp3', // Countdown beep sound
+    'success.mp3'   // Success/landing sound
+  ]
 
   constructor() {
-    // Initialize with default volume from localStorage
+    // Load saved settings
     const savedVolume = localStorage.getItem('balloon-game-volume')
-    if (savedVolume) {
-      this.masterVolume = parseFloat(savedVolume)
-    }
+    if (savedVolume) this.masterVolume = parseFloat(savedVolume)
 
     const savedMuted = localStorage.getItem('balloon-game-muted')
-    if (savedMuted) {
-      this.muted = savedMuted === 'true'
+    if (savedMuted) this.muted = savedMuted === 'true'
+
+    // No preloading - sounds will be created on demand
+  }
+
+  private getOrCreateSound(name: string): HTMLAudioElement | null {
+    // Return existing sound if already loaded
+    if (this.sounds.has(name)) {
+      return this.sounds.get(name)!
+    }
+
+    // Find the matching sound file
+    const soundFile = this.soundFiles.find(file => file.startsWith(name))
+    if (!soundFile) {
+      console.warn(`Sound file not found for: ${name}`)
+      return null
+    }
+
+    try {
+      // Create new audio element
+      const audio = new Audio(`/sounds/${soundFile}`)
+      audio.preload = 'none' // Don't preload - load when needed
+      audio.volume = this.muted ? 0 : this.masterVolume
+      
+      // Handle load errors gracefully
+      audio.onerror = () => {
+        console.warn(`Failed to load audio file: /sounds/${soundFile}`)
+      }
+      
+      this.sounds.set(name, audio)
+      console.log(`Created audio for: ${name}`)
+      return audio
+    } catch (error) {
+      console.warn(`Failed to create audio for ${name}:`, error)
+      return null
     }
   }
 
-  /**
-   * Load a sound effect
-   */
-  async loadSound(name: string, url: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const audio = new Audio()
-      
-      audio.oncanplaythrough = () => {
-        this.sounds.set(name, audio)
-        resolve()
+  private async unlockAudio(): Promise<void> {
+    if (!this.audioUnlocked) {
+      try {
+        // Try to play a silent sound to unlock audio context
+        const tempAudio = new Audio()
+        tempAudio.volume = 0
+        await tempAudio.play()
+        this.audioUnlocked = true
+        console.log('Audio context unlocked!')
+      } catch (error) {
+        console.log('Audio unlock attempt failed - continuing without audio:', error instanceof Error ? error.message : String(error))
+        this.audioUnlocked = true // Mark as unlocked even if failed to prevent blocking
       }
-      
-      audio.onerror = (error) => {
-        console.warn(`Failed to load sound: ${name}`, error)
-        reject(error)
-      }
-      
-      audio.src = url
-      audio.preload = 'auto'
-    })
+    }
   }
 
-  /**
-   * Play a sound effect
-   */
-  playSound(name: string, options: AudioOptions = {}): void {
+  async playSound(name: string, options: AudioOptions = {}): Promise<void> {
     if (this.muted) return
 
-    const sound = this.sounds.get(name)
+    // Don't await - let audio unlock and play in background
+    this.unlockAudio()
+
+    const sound = this.getOrCreateSound(name)
     if (!sound) {
-      console.warn(`Sound not found: ${name}`)
+      console.warn(`Sound not available: ${name}`)
       return
     }
 
     try {
-      // Clone the audio element for overlapping sounds
-      const audioClone = sound.cloneNode() as HTMLAudioElement
+      // Clone audio for overlapping sounds
+      const audio = sound.cloneNode() as HTMLAudioElement
+      audio.volume = (options.volume ?? 1.0) * this.masterVolume
+      audio.loop = options.loop ?? false
       
-      audioClone.volume = (options.volume ?? 1.0) * this.masterVolume
-      audioClone.loop = options.loop ?? false
-      audioClone.playbackRate = options.playbackRate ?? 1.0
+      // Reset playback position
+      audio.currentTime = 0
       
-      audioClone.play().catch(error => {
-        console.warn(`Failed to play sound: ${name}`, error)
+      // Don't await - let it play in background
+      audio.play().catch(error => {
+        console.log(`Audio play failed for ${name} - continuing silently:`, error instanceof Error ? error.message : String(error))
       })
+      console.log(`Playing sound: ${name}`)
+    } catch (error) {
+      console.log(`Audio play failed for ${name} - continuing silently:`, error instanceof Error ? error.message : String(error))
+    }
+  }
 
-      // Clean up after playback
-      if (!audioClone.loop) {
-        audioClone.addEventListener('ended', () => {
-          audioClone.remove()
-        })
+  playPopSound(): void {
+    this.playSound('pop', { volume: 0.7 })
+  }
+
+  playLandingFanfare(): void {
+    this.playSound('success', { volume: 0.8 })
+  }
+
+  playStartSound(): void {
+    this.playSound('start', { volume: 0.6 })
+  }
+
+  playGameStartSound(): void {
+    this.playSound('start', { volume: 0.7 }) // Use start.mp3 for game start
+  }
+
+  playCountdownBeep(final: boolean = false): void {
+    // Use countdown.mp3 for all countdown beeps (both regular and final)
+    this.playSound('countdown', { volume: 0.8 })
+  }
+
+  playSuccessSound(): void {
+    this.playSound('success', { volume: 0.8 })
+  }
+
+  playLandingSound(): void {
+    // Silenced until new sound is added
+    // this.playSound('landing', { volume: 0.6 })
+    this.playSuccessSound() // Use the new success sound
+  }
+
+  setWindIntensity(intensity: number): void {
+    if (this.muted) return
+    
+    try {
+      // Initialize wind sound once if not already created
+      if (!this.windSound) {
+        const windAudio = this.getOrCreateSound('wind')
+        if (windAudio) {
+          this.windSound = windAudio.cloneNode() as HTMLAudioElement
+          this.windSound.loop = true
+          this.windSound.preload = 'auto'
+        }
+      }
+      
+      if (this.windSound) {
+        if (intensity > 0) {
+          // Set volume based on intensity (0-1)
+          this.windSound.volume = Math.min(intensity * 0.4 * this.masterVolume, this.masterVolume)
+          
+          // Start playing if not already playing
+          if (this.windSound.paused || this.windSound.ended) {
+            this.windSound.currentTime = 0
+            this.windSound.play().catch(error => {
+              console.log('Wind sound play failed - continuing silently:', error instanceof Error ? error.message : String(error))
+            })
+          }
+        } else {
+          // Gradually fade out instead of abrupt stop
+          if (!this.windSound.paused) {
+            const fadeOut = () => {
+              if (this.windSound && this.windSound.volume > 0.01) {
+                this.windSound.volume = Math.max(0, this.windSound.volume - 0.05)
+                setTimeout(fadeOut, 50)
+              } else if (this.windSound) {
+                this.windSound.pause()
+                this.windSound.currentTime = 0
+              }
+            }
+            fadeOut()
+          }
+        }
       }
     } catch (error) {
-      console.warn(`Error playing sound: ${name}`, error)
+      console.log('Wind sound error - continuing silently:', error instanceof Error ? error.message : String(error))
     }
   }
 
-  /**
-   * Stop a specific sound
-   */
-  stopSound(name: string): void {
-    const sound = this.sounds.get(name)
-    if (sound) {
-      sound.pause()
-      sound.currentTime = 0
+  startWindSound(): void {
+    this.setWindIntensity(0.5)
+  }
+
+  stopWindSound(): void {
+    try {
+      if (this.windSound) {
+        this.windSound.pause()
+        this.windSound.currentTime = 0
+      }
+    } catch (error) {
+      console.log('Stop wind sound error - ignoring:', error instanceof Error ? error.message : String(error))
     }
   }
 
-  /**
-   * Stop all sounds
-   */
   stopAllSounds(): void {
-    this.sounds.forEach(sound => {
-      sound.pause()
-      sound.currentTime = 0
-    })
+    try {
+      this.sounds.forEach(sound => {
+        try {
+          sound.pause()
+          sound.currentTime = 0
+        } catch (error) {
+          // Ignore individual sound errors
+        }
+      })
+      this.stopWindSound()
+    } catch (error) {
+      console.log('Stop all sounds error - ignoring:', error instanceof Error ? error.message : String(error))
+    }
   }
 
-  /**
-   * Set master volume (0.0 - 1.0)
-   */
   setMasterVolume(volume: number): void {
     this.masterVolume = Math.max(0, Math.min(1, volume))
-    localStorage.setItem('balloon-game-volume', this.masterVolume.toString())
+    
+    try {
+      // Update all existing sounds
+      this.sounds.forEach(sound => {
+        try {
+          sound.volume = this.muted ? 0 : this.masterVolume
+        } catch (error) {
+          // Ignore individual sound errors
+        }
+      })
+      
+      if (this.windSound) {
+        try {
+          this.windSound.volume = this.muted ? 0 : this.masterVolume * 0.3
+        } catch (error) {
+          // Ignore wind sound error
+        }
+      }
+      
+      localStorage.setItem('balloon-game-volume', this.masterVolume.toString())
+    } catch (error) {
+      console.log('Set master volume error - ignoring:', error instanceof Error ? error.message : String(error))
+    }
   }
 
-  /**
-   * Get master volume
-   */
   getMasterVolume(): number {
     return this.masterVolume
   }
 
-  /**
-   * Mute/unmute all sounds
-   */
   setMuted(muted: boolean): void {
     this.muted = muted
-    localStorage.setItem('balloon-game-muted', muted.toString())
     
-    if (muted) {
-      this.stopAllSounds()
+    try {
+      // Update volume for all sounds
+      this.sounds.forEach(sound => {
+        try {
+          sound.volume = muted ? 0 : this.masterVolume
+        } catch (error) {
+          // Ignore individual sound errors
+        }
+      })
+      
+      if (muted) {
+        this.stopWindSound()
+      }
+      
+      localStorage.setItem('balloon-game-muted', muted.toString())
+    } catch (error) {
+      console.log('Set muted error - ignoring:', error instanceof Error ? error.message : String(error))
     }
   }
 
-  /**
-   * Check if muted
-   */
   isMuted(): boolean {
     return this.muted
   }
 
-  /**
-   * Create procedural wind sound (Web Audio API)
-   */
-  createWindSound(): void {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      
-      // Create noise buffer
-      const bufferSize = audioContext.sampleRate * 2
-      const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate)
-      const data = buffer.getChannelData(0)
-      
-      // Generate pink noise for wind effect
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = (Math.random() * 2 - 1) * 0.1
-      }
-      
-      // Create filter for wind-like sound
-      const source = audioContext.createBufferSource()
-      const filter = audioContext.createBiquadFilter()
-      const gainNode = audioContext.createGain()
-      
-      source.buffer = buffer
-      source.loop = true
-      
-      filter.type = 'lowpass'
-      filter.frequency.value = 300
-      filter.Q.value = 1
-      
-      gainNode.gain.value = this.muted ? 0 : 0.1 * this.masterVolume
-      
-      source.connect(filter)
-      filter.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-      
-      source.start()
-      
-      // Store reference for wind sound control
-      ;(this as any).windSource = source
-      ;(this as any).windGain = gainNode
-      
-    } catch (error) {
-      console.warn('Failed to create wind sound:', error)
-    }
-  }
-
-  /**
-   * Update wind intensity
-   */
-  setWindIntensity(intensity: number): void {
-    const windGain = (this as any).windGain
-    if (windGain) {
-      const volume = this.muted ? 0 : intensity * 0.2 * this.masterVolume
-      windGain.gain.setValueAtTime(volume, windGain.context.currentTime)
-    }
-  }
-
-  /**
-   * Load default game sounds
-   */
-  async loadDefaultSounds(): Promise<void> {
-    const soundUrls = {
-      pop: this.createPopSound(),
-      land: this.createLandSound(),
-      start: this.createStartSound()
-    }
-
-    const loadPromises = Object.entries(soundUrls).map(([name, url]) => 
-      this.loadSound(name, url).catch(() => {
-        // Ignore load failures for procedural sounds
-      })
-    )
-
-    await Promise.allSettled(loadPromises)
-  }
-
-  /**
-   * Create pop sound (procedural)
-   */
-  private createPopSound(): string {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
-      
-      oscillator.type = 'square'
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
-      oscillator.frequency.exponentialRampToValueAtTime(200, audioContext.currentTime + 0.1)
-      
-      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1)
-      
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
-      
-      oscillator.start()
-      oscillator.stop(audioContext.currentTime + 0.1)
-      
-      return 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DsuWkeBDaJ0O3QgS4HHnLA7+OZUQ0PVqzn77BdGAg+ltryxnkpBSl+zPLaizsIGGS57OOYTgwOUarm7L5uHAU6jdXzzn4wByF8wvPbkEELElyx6OyrWBUIQ5zd8sFuIAM5kdDw0H8vBx9vtu3lnVIPA1ap5+62XBoHN4nQ8tCALAcddsLu45ZQDAxOruLuuW0bBzuL0vLOcDEDH3DA8diHXA0OVqzn77BdGAg+ltryxnkpBSl+zPLaizsIGGS57OOYTgwOUarm7L5uHAU6jdXzzn4wByF8wvPbkEELElyx6OyrWBUIQ5zd8sFuIAM5kdDw0H8vBx9vtu3lnVIPA1ap5+62XBoHN4nQ8tCALAcddsLu45ZQDAxOruLuuW0bBzuL0vLOcDEDH3DA8diHXA0OVqzn77BdGAg+ltryxnkpBSl+zPLaizsIGGS57OOYTgwOUarm7L5uHAU6jdXzzn4wByF8wvPbkEELElyx6OyrWBUIQ5zd8sFuIAM5kdDw0H8vBx9vtu3lnVIPA1ap5+62XBoHN4nQ8tCALAcddsLu45ZQDAxOruLuuW0bBzuL0vLOcDEDH3DA8diHXA=='
-    } catch {
-      return ''
-    }
-  }
-
-  /**
-   * Create landing sound (procedural)
-   */
-  private createLandSound(): string {
-    // Returns empty string - would need more complex audio generation
-    return ''
-  }
-
-  /**
-   * Create start sound (procedural)
-   */
-  private createStartSound(): string {
-    // Returns empty string - would need more complex audio generation
-    return ''
-  }
-
-  /**
-   * Cleanup audio resources
-   */
   destroy(): void {
-    this.stopAllSounds()
-    
-    // Stop wind sound
-    const windSource = (this as any).windSource
-    if (windSource) {
-      windSource.stop()
+    try {
+      this.stopAllSounds()
+      this.sounds.clear()
+      this.windSound = null
+    } catch (error) {
+      console.log('Destroy audio manager error - ignoring:', error instanceof Error ? error.message : String(error))
     }
-    
-    this.sounds.clear()
+  }
+
+  // Legacy methods for compatibility - now non-blocking
+  async loadGameSounds(): Promise<void> {
+    try {
+      await this.unlockAudio()
+      console.log('Audio manager ready! Sounds will load on demand.')
+    } catch (error) {
+      console.log('Audio manager initialization warning - continuing without audio:', error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  stopSound(): void {
+    this.stopAllSounds()
   }
 }

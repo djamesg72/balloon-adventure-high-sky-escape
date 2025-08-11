@@ -1,11 +1,32 @@
 <template>
   <div id="app">
-    <BalloonGameComponent />
+    <OpeningScreen 
+      v-if="showOpeningScreen"
+      @gameStarted="onGameStarted"
+    />
+    <BalloonGameComponent 
+      v-else
+      :audio-manager="audioManager"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import BalloonGameComponent from './components/BalloonGameComponent.vue'
+import OpeningScreen from './components/OpeningScreen.vue'
+import type { AudioManager } from './utils/audioManager'
+
+const showOpeningScreen = ref(true)
+const audioManager = ref<AudioManager | null>(null)
+
+const onGameStarted = (manager: AudioManager) => {
+  audioManager.value = manager
+  showOpeningScreen.value = false
+  
+  // Play start sound
+  manager.playStartSound()
+}
 </script>
 
 <style>

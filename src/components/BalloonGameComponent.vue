@@ -25,10 +25,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, type Ref } from 'vue'
+import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 import { BalloonGame } from '../game/BalloonGame'
 import { GameState } from '../game/GameTypes'
 import GameHUD from './GameHUD.vue'
+import type { AudioManager } from '../utils/audioManager'
+
+// Props
+const props = defineProps<{
+  audioManager?: AudioManager | null
+}>()
 
 // Reactive state
 const gameContainer: Ref<HTMLElement | undefined> = ref<HTMLElement>()
@@ -39,29 +45,34 @@ const finalScore: Ref<number> = ref(0)
 const countdownSeconds: Ref<number> = ref(5)
 const timeProgress: Ref<number> = ref(100)
 const hasLanded: Ref<boolean> = ref(false)
-const landingMultiplier: Ref<number | null> = ref(null)
+const landingMultiplier: Ref<number | undefined> = ref(undefined)
 
 // Auto-land settings
 const autoLandEnabled: Ref<boolean> = ref(false)
 const autoLandMultiplier: Ref<number> = ref(2.0)
-let autoLandTriggered: boolean = false // Flag to prevent multiple auto-land triggers
+let autoLandTriggered: boolean = false
 
 // Game instance and timers
 let game: BalloonGame | null = null
-let countdownInterval: number | null = null
+let countdownInterval: ReturnType<typeof setInterval> | null = null
 
-// Computed properties
-const isMobile = computed(() => {
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-})
+// Audio integration methods
+const playPopSound = () => {
+  if (props.audioManager && !props.audioManager.isMuted()) {
+    props.audioManager.playPopSound()
+  }
+}
 
-// Risk indicator color
-const getRiskColor = (): string => {
-  const risk = riskPercentage.value
-  if (risk < 30) return '#4CAF50' // Green
-  if (risk < 60) return '#FF9800' // Orange
-  if (risk < 80) return '#FF5722' // Red-Orange
-  return '#F44336' // Red
+const playLandingSound = () => {
+  if (props.audioManager && !props.audioManager.isMuted()) {
+    props.audioManager.playLandingFanfare()
+  }
+}
+
+const playCountdownBeep = (isFinal: boolean = false) => {
+  if (props.audioManager && !props.audioManager.isMuted()) {
+    props.audioManager.playCountdownBeep(isFinal)
+  }
 }
 
 // Countdown functionality
@@ -71,11 +82,16 @@ const startCountdown = (): void => {
   const totalTime = 5000 // 5 seconds
   const startTime = Date.now()
   
+  // Play initial beep ONLY ONCE at the start
+  playCountdownBeep(false)
+  
   countdownInterval = setInterval(() => {
     const elapsed = Date.now() - startTime
     const remaining = Math.max(0, totalTime - elapsed)
+    const newCountdownSeconds = Math.ceil(remaining / 1000)
     
-    countdownSeconds.value = Math.ceil(remaining / 1000)
+    // Remove the beep that was playing every second - now only plays once at start
+    countdownSeconds.value = newCountdownSeconds
     timeProgress.value = (remaining / totalTime) * 100
     
     if (remaining <= 0) {
@@ -94,26 +110,53 @@ const stopCountdown = (): void => {
 
 // Game lifecycle methods
 const initializeGame = (): void => {
-  if (!gameContainer.value) return
+  if (!gameContainer.value) {
+    console.error('Game container not found')
+    return
+  }
   
   try {
     // Create canvas element for PixiJS
     const canvas = document.createElement('canvas')
+    canvas.style.width = '100%'
+    canvas.style.height = '100%'
+    canvas.style.display = 'block'
     gameContainer.value.appendChild(canvas)
     
+    console.log('Initializing BalloonGame...')
     game = new BalloonGame(canvas)
+    console.log('BalloonGame initialized successfully')
     
     // Setup event handlers
     game.onGameStateChange = (state: GameState) => {
+      console.log('Game state changed to:', state)
       gameState.value = state
       if (state === GameState.PLAYING) {
-        gameStartTime = Date.now()
+        // Start wind sound when game begins with initial intensity
+        if (props.audioManager) {
+          props.audioManager.setWindIntensity(0.3) // Start with moderate wind
+        }
+      } else if (state === GameState.CRASHED || state === GameState.LANDED) {
+        // Stop wind sound when game ends
+        if (props.audioManager) {
+          props.audioManager.setWindIntensity(0)
+        }
       }
     }
     
     game.onScoreUpdate = (score: number, multiplier: number) => {
       currentScore.value = score
       currentMultiplier.value = multiplier
+      
+      // Update wind intensity based on current multiplier (more intense as risk increases)
+      if (gameState.value === GameState.PLAYING && props.audioManager) {
+        // Calculate intensity based on multiplier: starts at 0.3, increases to 0.8 at high multipliers
+        const baseIntensity = 0.3
+        const maxIntensity = 0.8
+        const multiplierFactor = Math.min((multiplier - 1) / 10, 1) // Normalize multiplier to 0-1 over first 10x
+        const intensity = baseIntensity + (maxIntensity - baseIntensity) * multiplierFactor
+        props.audioManager.setWindIntensity(intensity)
+      }
       
       // Check auto-land conditions - but only if not already triggered this round
       if (autoLandEnabled.value && gameState.value === GameState.PLAYING && !autoLandTriggered && !hasLanded.value) {
@@ -129,17 +172,29 @@ const initializeGame = (): void => {
       finalScore.value = score
       hasLanded.value = true // Mark that player has landed successfully
       // Only store multiplier if not already set (for auto-land)
-      if (landingMultiplier.value === null) {
+      if (landingMultiplier.value === undefined) {
         landingMultiplier.value = currentMultiplier.value // Store the multiplier when landed
       }
+      
+      // Play landing fanfare
+      playLandingSound()
+      
       // Don't end the round - just record the score and continue playing
       // The round will only end when the balloon crashes
     }
     
     game.onCrash = (score: number) => {
+      // Play balloon pop sound
+      playPopSound()
+      
+      // Stop wind sound
+      if (props.audioManager) {
+        props.audioManager.setWindIntensity(0)
+      }
+      
       // Only crashes end the round
       finalScore.value = score
-      landingMultiplier.value = null // Clear landing multiplier when crashed
+      landingMultiplier.value = undefined // Clear landing multiplier when crashed
       autoLandTriggered = false // Reset for next round
       // Start countdown after showing results for 2 seconds
       setTimeout(() => {
@@ -149,9 +204,16 @@ const initializeGame = (): void => {
     }
     
     // Start initial countdown
+    console.log('Starting initial countdown...')
     startCountdown()
   } catch (error) {
     console.error('Failed to initialize game:', error)
+    // Create a fallback UI state
+    gameState.value = GameState.WAITING
+    setTimeout(() => {
+      console.log('Retrying game initialization...')
+      initializeGame()
+    }, 1000)
   }
 }
 
@@ -164,7 +226,7 @@ const startGame = (): void => {
     currentScore.value = 0
     currentMultiplier.value = 1
     hasLanded.value = false
-    landingMultiplier.value = null
+    landingMultiplier.value = undefined
     autoLandTriggered = false
     
     // Now start the game
@@ -186,20 +248,6 @@ const autoLandNow = (targetMultiplier: number): void => {
   }
 }
 
-const resetGame = (): void => {
-  if (game) {
-    game.restartGame()
-  }
-  currentScore.value = 0
-  currentMultiplier.value = 1
-  finalScore.value = 0
-  hasLanded.value = false
-  landingMultiplier.value = null
-  autoLandTriggered = false // Reset auto-land trigger flag
-  timeProgress.value = 100
-  stopCountdown()
-}
-
 // Auto-land methods
 const toggleAutoLand = (): void => {
   autoLandEnabled.value = !autoLandEnabled.value
@@ -218,6 +266,11 @@ onUnmounted(() => {
   stopCountdown()
   if (game) {
     game.destroy()
+  }
+  
+  // Stop all sounds when component unmounts
+  if (props.audioManager) {
+    props.audioManager.stopAllSounds()
   }
 })
 </script>
