@@ -51,8 +51,4 @@ export class BackgroundRenderer {
   getContainer(): PIXI.Container {
     return this.background
   }
-
-  getGradient(): PIXI.Graphics {
-    return this.gradient
-  }
 }

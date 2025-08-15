@@ -126,8 +126,4 @@ export class ObjectManager {
     this.objects.forEach(obj => this.background.removeChild(obj))
     this.objects = []
   }
-
-  public getObjectCount(): number {
-    return this.objects.length
-  }
 }
