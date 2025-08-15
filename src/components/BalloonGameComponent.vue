@@ -27,7 +27,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 import { BalloonGame } from '../game/BalloonGame'
-import { GameState } from '../game/GameTypes'
+import { GameState } from '../types/game'
 import GameHUD from './GameHUD.vue'
 import type { AudioManager } from '../utils/audioManager'
 

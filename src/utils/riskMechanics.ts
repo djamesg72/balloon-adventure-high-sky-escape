@@ -1,7 +1,3 @@
-/**
- * Legacy risk mechanics - superseded by gameUtils.ts
- * Keeping for compatibility
- */
 
 export function calculatePopRisk(currentAltitude: number, popThreshold: number): boolean {
   const riskLevel = currentAltitude / popThreshold;

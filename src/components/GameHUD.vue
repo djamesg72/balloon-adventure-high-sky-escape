@@ -69,7 +69,7 @@
 
 <script setup lang="ts">
 import { computed, watch, type PropType } from 'vue'
-import { GameState } from '../game/GameTypes'
+import { GameState } from '../types/game'
 
 // Props
 const props = defineProps({

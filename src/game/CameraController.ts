@@ -8,20 +8,20 @@ export class CameraController {
     this.stage = stage
   }
 
-  update(balloonY: number, screenHeight: number): void {
-    const targetCameraY = balloonY - (screenHeight * 0.7) // Keep balloon in lower 30% of screen
+  public update(yPos: number, screenHeight: number): void {
+    const targetCameraY = yPos - (screenHeight * 0.7) // Keep balloon in lower 30% of screen
     this.cameraY += (targetCameraY - this.cameraY) * 0.05 // Smooth camera follow
     
     // Apply camera position to the stage
     this.stage.y = -this.cameraY
   }
 
-  reset(): void {
+  public reset(): void {
     this.cameraY = 0
     this.stage.y = 0
   }
 
-  getCameraY(): number {
+  public getCameraY(): number {
     return this.cameraY
   }
 }
