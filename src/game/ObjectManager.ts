@@ -9,7 +9,7 @@ export class ObjectManager {
     this.background = background
   }
 
-  initializeObjects(config: any): void {
+  public initializeObjects(config: any): void {
     this.clearAllObjects()
     
     // Create only clouds at the beginning
@@ -28,7 +28,7 @@ export class ObjectManager {
     }
   }
 
-  spawnObjectsByAltitude(multiplier: number, cameraY: number, config: any): void {
+  public spawnObjectsByAltitude(multiplier: number, cameraY: number, config: any): void {
     // Only spawn occasionally to avoid too many objects
     if (Math.random() > 0.05) return // 5% chance per frame
     
@@ -77,7 +77,7 @@ export class ObjectManager {
     }
   }
 
-  updateObjects(delta: number, cameraY: number, config: any): void {
+  public updateObjects(delta: number, cameraY: number, config: any): void {
     const time = Date.now() * 0.01
     const screenBottom = cameraY + config.height + 200
     
@@ -115,19 +115,15 @@ export class ObjectManager {
     }
   }
 
-  redistributeObjects(config: any, cameraY: number): void {
+  public redistributeObjects(config: any, cameraY: number): void {
     this.objects.forEach(obj => {
       obj.x = Math.random() * (config.width + 200) - 100
       obj.y = cameraY + Math.random() * (config.height * 4) - config.height * 2
     })
   }
 
-  clearAllObjects(): void {
+  public clearAllObjects(): void {
     this.objects.forEach(obj => this.background.removeChild(obj))
     this.objects = []
-  }
-
-  getObjectCount(): number {
-    return this.objects.length
   }
 }

@@ -1,5 +1,5 @@
 import * as PIXI from 'pixi.js'
-import { GameState, GameConfig, GameCallbacks } from './GameTypes'
+import { GameState, GameConfig } from '../types/game'
 import { ObjectFactory } from './ObjectFactory'
 import { BackgroundRenderer } from './BackgroundRenderer'
 import { RiskCalculator } from './RiskCalculator'
@@ -8,7 +8,7 @@ import { BalloonController } from './BalloonController'
 import { CameraController } from './CameraController'
 
 // Re-export for backward compatibility
-export { GameState } from './GameTypes'
+export { GameState } from '../types/game'
 
 export class BalloonGame {
   private app: PIXI.Application
@@ -50,11 +50,19 @@ export class BalloonGame {
     risk: {
       minSafeTime: 3000, // 3 seconds minimum
       maxTime: 30000, // 30 seconds maximum
-      baseRiskMultiplier: 1.5
+      baseRiskMultiplier: 1.5,
+      riskIncreaseRate: 0.002
     },
     scoring: {
       pointsPerSecond: 10,
-      heightMultiplier: 0.1
+      heightMultiplier: 0.1,
+      landingBonus: 0
+    },
+    clouds: {
+      count: 20,
+      speedVariation: 0.5,
+      alphaRange: [0.3, 0.9],
+      scaleRange: [0.6, 1.4]
     }
   }
 
@@ -199,10 +207,10 @@ export class BalloonGame {
 
   private setupInteractions(): void {
     // Touch/click to start game
-    this.app.stage.interactive = true
+    this.app.stage.interactive = true;
     this.app.stage.on('pointerdown', (event: any) => {
       if (this.gameState === GameState.WAITING && event.target === this.app.stage) {
-        this.startGame()
+        this.startGame();
       }
     })
   }
