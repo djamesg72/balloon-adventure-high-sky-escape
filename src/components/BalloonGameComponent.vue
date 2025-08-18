@@ -16,14 +16,17 @@
         :autoLandMultiplier1="autoLandMultiplier1"
         :hasLanded1="hasLanded1"
         :landingMultiplier1="landingMultiplier1"
+        :hasCrashed1="hasCrashed1"
         :autoLandEnabled2="autoLandEnabled2"
         :autoLandMultiplier2="autoLandMultiplier2"
         :hasLanded2="hasLanded2"
         :landingMultiplier2="landingMultiplier2"
+        :hasCrashed2="hasCrashed2"
         :autoLandEnabled="autoLandEnabled"
         :autoLandMultiplier="autoLandMultiplier"
         :hasLanded="hasLanded"
         :landingMultiplier="landingMultiplier"
+        :audioManager="audioManager"
         @landNow1="landNow1"
         @landNow2="landNow2"
         @toggleAutoLand1="toggleAutoLand1"
@@ -64,6 +67,8 @@ const hasLanded1: Ref<boolean> = ref(false)
 const hasLanded2: Ref<boolean> = ref(false)
 const landingMultiplier1: Ref<number | undefined> = ref(undefined)
 const landingMultiplier2: Ref<number | undefined> = ref(undefined)
+const hasCrashed1: Ref<boolean> = ref(false)
+const hasCrashed2: Ref<boolean> = ref(false)
 
 // Legacy state for backward compatibility
 const hasLanded: Ref<boolean> = ref(false)
@@ -230,31 +235,28 @@ const initializeGame = (): void => {
       // The round will only end when the balloon crashes
     }
     
-    // Add separate landing callbacks for each balloon if they exist
-    if (game.onLand1) {
-      game.onLand1 = (score: number) => {
-        finalScore.value = score
-        hasLanded1.value = true
-        if (landingMultiplier1.value === undefined) {
-          landingMultiplier1.value = currentMultiplier.value
-        }
-        playLandingSound()
+    // Add separate landing callbacks for each balloon
+    game.onLand1 = (score: number) => {
+      finalScore.value = score
+      hasLanded1.value = true
+      if (landingMultiplier1.value === undefined) {
+        landingMultiplier1.value = currentMultiplier.value
       }
+      playLandingSound()
     }
     
-    if (game.onLand2) {
-      game.onLand2 = (score: number) => {
-        finalScore.value = score
-        hasLanded2.value = true
-        if (landingMultiplier2.value === undefined) {
-          landingMultiplier2.value = currentMultiplier.value
-        }
-        playLandingSound()
+    game.onLand2 = (score: number) => {
+      finalScore.value = score
+      hasLanded2.value = true
+      if (landingMultiplier2.value === undefined) {
+        landingMultiplier2.value = currentMultiplier.value
       }
+      playLandingSound()
     }
     
     game.onCrash1 = (score: number) => {
       console.log('Balloon 1 crashed!')
+      hasCrashed1.value = true
       // Play balloon pop sound
       playPopSound()
       
@@ -267,6 +269,7 @@ const initializeGame = (): void => {
     
     game.onCrash2 = (score: number) => {
       console.log('Balloon 2 crashed!')
+      hasCrashed2.value = true
       // Play balloon pop sound
       playPopSound()
       
@@ -303,11 +306,13 @@ const startGame = (): void => {
     // Reset balloon 1 state
     hasLanded1.value = false
     landingMultiplier1.value = undefined
+    hasCrashed1.value = false
     autoLandTriggered1 = false
     
     // Reset balloon 2 state
     hasLanded2.value = false
     landingMultiplier2.value = undefined
+    hasCrashed2.value = false
     autoLandTriggered2 = false
     
     // Reset legacy state

@@ -163,6 +163,11 @@ export class BalloonController {
     }
   }
 
+  updateInitialPosition(newX: number): void {
+    this.initialX = newX
+    this.balloon.x = newX
+  }
+
   getBalloonPosition(): { x: number, y: number } {
     return { x: this.balloon.x, y: this.balloon.y }
   }

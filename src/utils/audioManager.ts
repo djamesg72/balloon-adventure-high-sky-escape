@@ -284,6 +284,10 @@ export class AudioManager {
     return this.muted
   }
 
+  toggleMute(): void {
+    this.setMuted(!this.muted)
+  }
+
   destroy(): void {
     try {
       this.stopAllSounds()

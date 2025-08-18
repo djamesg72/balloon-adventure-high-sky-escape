@@ -134,17 +134,45 @@ export class BalloonGame {
     this.app.stage.addChild(this.backgroundRenderer.getContainer())
   }
 
+  private isMobileDevice(): boolean {
+    return this.config.width <= 768 || this.config.height <= 600
+  }
+
+  private getBalloonPositions(): { x1: number, x2: number } {
+    const isMobile = this.isMobileDevice()
+    let positions: { x1: number, x2: number }
+    
+    if (isMobile) {
+      // On mobile, position balloons closer to center for better visibility
+      positions = {
+        x1: this.config.width * 0.3, // 30% from left
+        x2: this.config.width * 0.7  // 70% from left
+      }
+    } else {
+      // On desktop, use wider spacing
+      positions = {
+        x1: this.config.width / 4,      // 25% from left
+        x2: 3 * this.config.width / 4   // 75% from left
+      }
+    }
+    
+    console.log(`Balloon positioning - Width: ${this.config.width}, isMobile: ${isMobile}, x1: ${positions.x1}, x2: ${positions.x2}`)
+    return positions
+  }
+
   private initializeBalloons(): void {
+    const positions = this.getBalloonPositions()
+    
     // Create and setup balloon1
     this.balloon1 = ObjectFactory.createBalloon()
-    this.balloon1.x = this.config.width / 4;
+    this.balloon1.x = positions.x1
     this.balloon1.y = this.config.balloon.initialY
     this.app.stage.addChild(this.balloon1)
     this.balloonController1 = new BalloonController(this.balloon1, this.config)
 
     // Create and setup balloon2 
     this.balloon2 = ObjectFactory.createBalloon()
-    this.balloon2.x = 3 * this.config.width / 4;
+    this.balloon2.x = positions.x2
     this.balloon2.y = this.config.balloon.initialY
     this.app.stage.addChild(this.balloon2)
     this.balloonController2 = new BalloonController(this.balloon2, this.config)
@@ -180,18 +208,28 @@ export class BalloonGame {
       }
       
       // Reposition balloons to new screen positions
+      const positions = this.getBalloonPositions()
+      
       if (this.balloon1) {
-        this.balloon1.x = newWidth / 4
+        this.balloon1.x = positions.x1
         this.config.balloon.initialY = newHeight - 150
         if (this.gameState === GameState.WAITING) {
           this.balloon1.y = this.config.balloon.initialY
         }
+        // Update balloon controller's initial position
+        if (this.balloonController1) {
+          this.balloonController1.updateInitialPosition(positions.x1)
+        }
       }
 
       if (this.balloon2) {
-        this.balloon2.x = 3 * newWidth / 4
+        this.balloon2.x = positions.x2
         if (this.gameState === GameState.WAITING) {
           this.balloon2.y = this.config.balloon.initialY
+        }
+        // Update balloon controller's initial position
+        if (this.balloonController2) {
+          this.balloonController2.updateInitialPosition(positions.x2)
         }
       }
       
@@ -302,8 +340,21 @@ export class BalloonGame {
         this.balloonController2.updatePosition(delta, true)
       }
 
-      // Update camera to follow first balloon (or you could use average position)
-      const balloonPos = this.balloonController1.getBalloonPosition()
+      // Update camera to follow active balloon(s)
+      let balloonPos: { x: number, y: number }
+      if (!this.hasCrashed1 && !this.hasCrashed2) {
+        // Both balloons active - follow balloon1 (primary)
+        balloonPos = this.balloonController1.getBalloonPosition()
+      } else if (!this.hasCrashed1) {
+        // Only balloon1 active
+        balloonPos = this.balloonController1.getBalloonPosition()
+      } else if (!this.hasCrashed2) {
+        // Only balloon2 active
+        balloonPos = this.balloonController2.getBalloonPosition()
+      } else {
+        // Both crashed - keep last position (shouldn't reach here due to endGame)
+        balloonPos = this.balloonController1.getBalloonPosition()
+      }
       this.cameraController.update(balloonPos.y, this.config.height)
 
       // Update score and multiplier with geometric expansion

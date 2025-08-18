@@ -7,6 +7,16 @@
       <div class="multiplier">{{ currentMultiplier.toFixed(2) }}x</div>
     </div>
     
+    <!-- Sound Toggle Button - Outside panel but near bottom right -->
+    <button 
+      v-if="audioManager"
+      @click="toggleSound" 
+      :class="['sound-toggle', { muted: isMuted }]"
+      :title="isMuted ? 'Enable Sound' : 'Disable Sound'"
+    >
+      {{ isMuted ? '🔇' : '🔊' }}
+    </button>
+    
     <!-- Bottom HUD Panel - Always visible -->
     <div class="bottom-hud">
       <!-- Timer Bar - Between rounds only (shared for both betting modules) -->
@@ -58,14 +68,15 @@
           <!-- Land Button 1 -->
           <button 
             @click="landNow1" 
-            :disabled="gameState !== 'playing' || hasLanded1"
+            :disabled="gameState !== 'playing' || hasLanded1 || hasCrashed1"
             :class="['land-button', { 
               'auto-triggered': autoLandEnabled1 && shouldAutoLand1,
-              'disabled': gameState !== 'playing' || hasLanded1,
-              'landed': hasLanded1
+              'disabled': gameState !== 'playing' || hasLanded1 || hasCrashed1,
+              'landed': hasLanded1,
+              'crashed': hasCrashed1 && !hasLanded1
             }]"
           >
-            {{ hasLanded1 && landingMultiplier1 ? `✅ LANDED AT ${landingMultiplier1.toFixed(2)}x!` : (hasLanded1 ? '✅ LANDED SAFELY!' : (autoLandEnabled1 && shouldAutoLand1 ? '🤖 AUTO LANDING' : '🪂 LAND NOW')) }}
+            {{ hasLanded1 ? (landingMultiplier1 ? `✅ LANDED AT ${landingMultiplier1.toFixed(2)}x!` : '✅ LANDED SAFELY!') : (hasCrashed1 ? '💥 CRASHED!' : (autoLandEnabled1 && shouldAutoLand1 ? '🤖 AUTO LANDING' : '🪂 LAND NOW')) }}
           </button>
         </div>
 
@@ -102,14 +113,15 @@
           <!-- Land Button 2 -->
           <button 
             @click="landNow2" 
-            :disabled="gameState !== 'playing' || hasLanded2"
+            :disabled="gameState !== 'playing' || hasLanded2 || hasCrashed2"
             :class="['land-button', { 
               'auto-triggered': autoLandEnabled2 && shouldAutoLand2,
-              'disabled': gameState !== 'playing' || hasLanded2,
-              'landed': hasLanded2
+              'disabled': gameState !== 'playing' || hasLanded2 || hasCrashed2,
+              'landed': hasLanded2,
+              'crashed': hasCrashed2 && !hasLanded2
             }]"
           >
-            {{ hasLanded2 && landingMultiplier2 ? `✅ LANDED AT ${landingMultiplier2.toFixed(2)}x!` : (hasLanded2 ? '✅ LANDED SAFELY!' : (autoLandEnabled2 && shouldAutoLand2 ? '🤖 AUTO LANDING' : '🪂 LAND NOW')) }}
+            {{ hasLanded2 ? (landingMultiplier2 ? `✅ LANDED AT ${landingMultiplier2.toFixed(2)}x!` : '✅ LANDED SAFELY!') : (hasCrashed2 ? '💥 CRASHED!' : (autoLandEnabled2 && shouldAutoLand2 ? '🤖 AUTO LANDING' : '🪂 LAND NOW')) }}
           </button>
         </div>
       </div>
@@ -118,8 +130,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, watch, type PropType } from 'vue'
+import { computed, watch, ref, type PropType } from 'vue'
 import { GameState } from '../types/game'
+import type { AudioManager } from '../utils/audioManager'
 
 // Props
 const props = defineProps({
@@ -160,6 +173,10 @@ const props = defineProps({
     type: Number,
     default: null
   },
+  hasCrashed1: {
+    type: Boolean,
+    default: false
+  },
   // Betting Module 2 props
   autoLandEnabled2: {
     type: Boolean,
@@ -177,6 +194,10 @@ const props = defineProps({
     type: Number,
     default: null
   },
+  hasCrashed2: {
+    type: Boolean,
+    default: false
+  },
   // Legacy props for backward compatibility
   autoLandEnabled: {
     type: Boolean,
@@ -193,8 +214,22 @@ const props = defineProps({
   landingMultiplier: {
     type: Number,
     default: null
+  },
+  audioManager: {
+    type: Object as PropType<AudioManager | null>,
+    default: null
   }
 })
+
+// Reactive state for audio muted status
+const isMuted = ref(false)
+
+// Watch for changes in audioManager to sync muted state
+watch(() => props.audioManager, (newAudioManager) => {
+  if (newAudioManager) {
+    isMuted.value = newAudioManager.isMuted()
+  }
+}, { immediate: true })
 
 // Emits
 const emit = defineEmits<{
@@ -229,7 +264,9 @@ const shouldAutoLand = computed(() => {
 
 // Methods
 const landNow1 = () => {
-  emit('landNow1')
+  if (!props.hasCrashed1) {
+    emit('landNow1')
+  }
 }
 
 const toggleAutoLand1 = () => {
@@ -243,7 +280,9 @@ const updateAutoLandMultiplier1 = (multiplier: number) => {
 }
 
 const landNow2 = () => {
-  emit('landNow2')
+  if (!props.hasCrashed2) {
+    emit('landNow2')
+  }
 }
 
 const toggleAutoLand2 = () => {
@@ -294,6 +333,14 @@ const getTimerColor = (): string => {
   if (progress > 30) return '#fbbf24' // Yellow - time running out
   if (progress > 10) return '#f97316' // Orange - urgent
   return '#ef4444' // Red - critical
+}
+
+// Toggle sound on/off
+const toggleSound = () => {
+  if (props.audioManager) {
+    props.audioManager.toggleMute()
+    isMuted.value = props.audioManager.isMuted()
+  }
 }
 </script>
 
@@ -349,6 +396,34 @@ const getTimerColor = (): string => {
   color: #fbbf24;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   margin-top: 5px;
+}
+
+.sound-toggle {
+  position: absolute;
+  top: 110px; /* Moved further down from the score panel */
+  right: 20px; /* Align with panel's right edge */
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 1.2em;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.sound-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.sound-toggle.muted {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
 }
 
 /* Bottom HUD Panel */
@@ -563,7 +638,7 @@ const getTimerColor = (): string => {
   width: 100%;
 }
 
-.land-button:hover:not(.landed):not(.disabled) {
+.land-button:hover:not(.landed):not(.disabled):not(.crashed) {
   transform: translateY(-2px);
   box-shadow: 0 12px 30px rgba(74, 222, 128, 0.6);
   background: linear-gradient(45deg, #22c55e, #16a34a);
@@ -606,6 +681,21 @@ const getTimerColor = (): string => {
   background: linear-gradient(45deg, #10b981, #059669);
   transform: none;
   box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+}
+
+.land-button.crashed {
+  background: linear-gradient(45deg, #dc2626, #b91c1c);
+  color: #ffffff;
+  border-color: #dc2626;
+  cursor: not-allowed;
+  opacity: 0.8;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+}
+
+.land-button.crashed:hover {
+  background: linear-gradient(45deg, #dc2626, #b91c1c);
+  transform: none;
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
 }
 
 @keyframes pulse-success {
