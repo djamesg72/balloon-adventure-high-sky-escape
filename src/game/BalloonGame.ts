@@ -13,10 +13,14 @@ export { GameState } from './GameTypes'
 export class BalloonGame {
   private app: PIXI.Application
   private gameState: GameState = GameState.WAITING
-  private balloon!: PIXI.Container
+  private balloon1!: PIXI.Container
+  private balloon2!: PIXI.Container
   private ui!: PIXI.Container
   
-  private hasLanded: boolean = false
+  private hasLanded1: boolean = false
+  private hasLanded2: boolean = false
+  private hasCrashed1: boolean = false
+  private hasCrashed2: boolean = false
   
   // Game variables
   private score: number = 0
@@ -26,7 +30,8 @@ export class BalloonGame {
   // Game modules
   private backgroundRenderer!: BackgroundRenderer
   private objectManager!: ObjectManager
-  private balloonController!: BalloonController
+  private balloonController1!: BalloonController  // Separate controller for balloon1
+  private balloonController2!: BalloonController  // Separate controller for balloon2
   private cameraController!: CameraController
 
   // Configuration
@@ -56,8 +61,11 @@ export class BalloonGame {
   // Event callbacks
   public onScoreUpdate?: (score: number, multiplier: number) => void
   public onGameStateChange?: (state: GameState) => void
-  public onCrash?: (finalScore: number) => void
+  public onCrash1?: (finalScore: number) => void
+  public onCrash2?: (finalScore: number) => void
   public onLand?: (finalScore: number) => void
+  public onLand1?: (finalScore: number) => void
+  public onLand2?: (finalScore: number) => void
 
   constructor(canvasElement: HTMLCanvasElement) {
     try {
@@ -93,7 +101,7 @@ export class BalloonGame {
       console.log('Initializing game modules...')
       this.initializeBackground()
       this.initializeUI()
-      this.initializeBalloon()
+      this.initializeBalloons()
       this.initializeObjects()
 
       // Setup game loop
@@ -118,13 +126,20 @@ export class BalloonGame {
     this.app.stage.addChild(this.backgroundRenderer.getContainer())
   }
 
-  private initializeBalloon(): void {
-    this.balloon = ObjectFactory.createBalloon()
-    this.balloon.x = this.config.width / 2
-    this.balloon.y = this.config.balloon.initialY
-    this.app.stage.addChild(this.balloon)
-    
-    this.balloonController = new BalloonController(this.balloon, this.config)
+  private initializeBalloons(): void {
+    // Create and setup balloon1
+    this.balloon1 = ObjectFactory.createBalloon()
+    this.balloon1.x = this.config.width / 4;
+    this.balloon1.y = this.config.balloon.initialY
+    this.app.stage.addChild(this.balloon1)
+    this.balloonController1 = new BalloonController(this.balloon1, this.config)
+
+    // Create and setup balloon2 
+    this.balloon2 = ObjectFactory.createBalloon()
+    this.balloon2.x = 3 * this.config.width / 4;
+    this.balloon2.y = this.config.balloon.initialY
+    this.app.stage.addChild(this.balloon2)
+    this.balloonController2 = new BalloonController(this.balloon2, this.config)
   }
 
   private initializeObjects(): void {
@@ -156,12 +171,19 @@ export class BalloonGame {
         this.backgroundRenderer.updateGradient(this.currentMultiplier, this.config.balloon.initialY, this.config.width)
       }
       
-      // Reposition balloon to center of new dimensions
-      if (this.balloon) {
-        this.balloon.x = newWidth / 2
+      // Reposition balloons to new screen positions
+      if (this.balloon1) {
+        this.balloon1.x = newWidth / 4
         this.config.balloon.initialY = newHeight - 150
         if (this.gameState === GameState.WAITING) {
-          this.balloon.y = this.config.balloon.initialY
+          this.balloon1.y = this.config.balloon.initialY
+        }
+      }
+
+      if (this.balloon2) {
+        this.balloon2.x = 3 * newWidth / 4
+        if (this.gameState === GameState.WAITING) {
+          this.balloon2.y = this.config.balloon.initialY
         }
       }
       
@@ -194,7 +216,10 @@ export class BalloonGame {
 
     this.gameState = GameState.PLAYING
     this.startTime = Date.now()
-    this.hasLanded = false // Reset for new round
+    this.hasLanded1 = false // Reset for new round
+    this.hasLanded2 = false // Reset for new round
+    this.hasCrashed1 = false // Reset crash states
+    this.hasCrashed2 = false
 
     this.onGameStateChange?.(this.gameState)
   }
@@ -203,12 +228,16 @@ export class BalloonGame {
     // Reset all game variables to initial state
     this.score = 0
     this.currentMultiplier = 1
-    this.hasLanded = false
+    this.hasLanded1 = false
+    this.hasLanded2 = false
+    this.hasCrashed1 = false
+    this.hasCrashed2 = false
     this.gameState = GameState.WAITING
     this.startTime = 0 // Reset start time
     
     // Reset balloon position
-    this.balloonController.resetPosition()
+    this.balloonController1.resetPosition()
+    this.balloonController2.resetPosition()
     
     // Reset object manager
     this.objectManager.clearAllObjects()
@@ -217,15 +246,36 @@ export class BalloonGame {
     this.cameraController.reset()
   }
 
-  public landBalloon(): void {
+  public landBalloon1(): void {
     // Don't change game state - just record the score and continue playing
     const finalScore = Math.floor(this.score * this.currentMultiplier)
-    this.hasLanded = true
+    this.hasLanded1 = true
     
-    // Call the land callback but keep the game running
+    // Call the specific balloon 1 land callback
+    this.onLand1?.(finalScore)
+    // Also call the general land callback for backward compatibility
     this.onLand?.(finalScore)
     
     // Game continues running until crash
+  }
+
+  public landBalloon2(): void {
+    // Don't change game state - just record the score and continue playing
+    const finalScore = Math.floor(this.score * this.currentMultiplier)
+    this.hasLanded2 = true
+    
+    // Call the specific balloon 2 land callback
+    this.onLand2?.(finalScore)
+    // Also call the general land callback for backward compatibility
+    this.onLand?.(finalScore)
+    
+    // Game continues running until crash
+  }
+
+  public landBalloon(): void {
+    // Legacy method - lands both balloons
+    this.landBalloon1()
+    this.landBalloon2()
   }
 
   private gameLoop(delta: number): void {
@@ -236,11 +286,16 @@ export class BalloonGame {
       const currentTime = Date.now()
       const elapsedTime = currentTime - this.startTime;
 
-      // Update balloon position
-      this.balloonController.updatePosition(delta, true)
+      // Update balloon positions (only if not crashed)
+      if (!this.hasCrashed1) {
+        this.balloonController1.updatePosition(delta, true)
+      }
+      if (!this.hasCrashed2) {
+        this.balloonController2.updatePosition(delta, true)
+      }
 
-      // Update camera to follow balloon
-      const balloonPos = this.balloonController.getBalloonPosition()
+      // Update camera to follow first balloon (or you could use average position)
+      const balloonPos = this.balloonController1.getBalloonPosition()
       this.cameraController.update(balloonPos.y, this.config.height)
 
       // Update score and multiplier with geometric expansion
@@ -250,17 +305,30 @@ export class BalloonGame {
       // Geometric multiplier growth: 1.01^(time_in_seconds)
       this.currentMultiplier = RiskCalculator.calculateMultiplier(elapsedTime)
 
-      // Risk-based crash system - higher multiplier = higher crash risk
-      if (RiskCalculator.shouldCrash(this.currentMultiplier)) {
-        this.crashBalloon()
+      // Risk-based crash system - check each balloon individually
+      if (!this.hasCrashed1 && RiskCalculator.shouldCrash(this.currentMultiplier)) {
+        this.crashBalloon1()
+      }
+      if (!this.hasCrashed2 && RiskCalculator.shouldCrash(this.currentMultiplier)) {
+        this.crashBalloon2()
+      }
+
+      // Check if both balloons have crashed - if so, end the game
+      if (this.hasCrashed1 && this.hasCrashed2) {
+        this.endGame()
         return
       }
 
       // Dynamic object spawning based on altitude
       this.objectManager.spawnObjectsByAltitude(this.currentMultiplier, this.cameraController.getCameraY(), this.config)
 
-      // Update risk indicator (balloon color changes) 
-      this.balloonController.updateRiskVisual(this.currentMultiplier)
+      // Update risk indicator (balloon color changes) for balloons that haven't crashed
+      if (!this.hasCrashed1) {
+        this.balloonController1.updateRiskVisual(this.currentMultiplier)
+      }
+      if (!this.hasCrashed2) {
+        this.balloonController2.updateRiskVisual(this.currentMultiplier)
+      }
 
       // Move objects (parallax effect)
       this.objectManager.updateObjects(delta, this.cameraController.getCameraY(), this.config)
@@ -274,32 +342,56 @@ export class BalloonGame {
       // When waiting, ensure multiplier is reset to 1
       this.currentMultiplier = 1
       
-      // When waiting, add a gentle sway to the balloon
-      this.balloonController.updatePosition(delta, false)
+      // When waiting, add a gentle sway to both balloons
+      this.balloonController1.updatePosition(delta, false)
+      this.balloonController2.updatePosition(delta, false)
     }
   }
 
-  private crashBalloon(): void {
+  private crashBalloon1(): void {
+    this.hasCrashed1 = true
+    
+    // Create crash animation (balloon pop effect) for balloon1
+    this.balloonController1.createCrashEffect(this.backgroundRenderer.getContainer())
+    
+    // Calculate final score for this balloon
+    const finalScore = this.hasLanded1 ? Math.floor(this.score * this.currentMultiplier) : 0
+    this.onCrash1?.(finalScore)
+    
+    console.log('Balloon 1 crashed! Waiting for balloon 2...')
+  }
+
+  private crashBalloon2(): void {
+    this.hasCrashed2 = true
+    
+    // Create crash animation (balloon pop effect) for balloon2
+    this.balloonController2.createCrashEffect(this.backgroundRenderer.getContainer())
+    
+    // Calculate final score for this balloon
+    const finalScore = this.hasLanded2 ? Math.floor(this.score * this.currentMultiplier) : 0
+    this.onCrash2?.(finalScore)
+    
+    console.log('Balloon 2 crashed! Waiting for balloon 1...')
+  }
+
+  private endGame(): void {
     this.gameState = GameState.CRASHED
-    
-    // Create crash animation (balloon pop effect)
-    this.balloonController.createCrashEffect(this.backgroundRenderer.getContainer())
-    
     this.onGameStateChange?.(this.gameState)
-    
-    // If player landed before crashing, they keep their score; otherwise 0
-    const finalScore = this.hasLanded ? Math.floor(this.score * this.currentMultiplier) : 0
-    this.onCrash?.(finalScore)
+    console.log('Both balloons crashed! Game over.')
   }
 
   public resetGame(): void {
     this.gameState = GameState.WAITING
     this.score = 0
     this.currentMultiplier = 1
-    this.hasLanded = false
+    this.hasLanded1 = false
+    this.hasLanded2 = false
+    this.hasCrashed1 = false
+    this.hasCrashed2 = false
     
     // Reset balloon position and controller
-    this.balloonController.resetPosition()
+    this.balloonController1.resetPosition()
+    this.balloonController2.resetPosition()
     
     // Reset camera position
     this.cameraController.reset()
@@ -331,5 +423,21 @@ export class BalloonGame {
 
   public getCurrentMultiplier(): number {
     return this.currentMultiplier
+  }
+
+  public hasBalloon1Crashed(): boolean {
+    return this.hasCrashed1
+  }
+
+  public hasBalloon2Crashed(): boolean {
+    return this.hasCrashed2
+  }
+
+  public hasBalloon1Landed(): boolean {
+    return this.hasLanded1
+  }
+
+  public hasBalloon2Landed(): boolean {
+    return this.hasLanded2
   }
 }

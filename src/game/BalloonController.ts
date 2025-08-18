@@ -6,11 +6,13 @@ export class BalloonController {
   private config: any
   private balloonSpeed: number = 0
   private swayOffset: number = 0
+  private initialX: number  // Store the initial X position for this specific balloon
 
   constructor(balloon: PIXI.Container, config: any) {
     this.balloon = balloon
     this.config = config
     this.balloonSpeed = config.balloon.speed
+    this.initialX = balloon.x  // Remember the balloon's initial X position
   }
 
   updatePosition(delta: number, isPlaying: boolean): void {
@@ -22,14 +24,14 @@ export class BalloonController {
       )
       this.balloon.y -= this.balloonSpeed * delta
 
-      // Balloon sway animation
+      // Balloon sway animation around its initial X position
       this.swayOffset += this.config.balloon.swaySpeed * delta
-      this.balloon.x = this.config.width / 2 + 
+      this.balloon.x = this.initialX + 
         Math.sin(this.swayOffset) * this.config.balloon.swayAmplitude
     } else {
-      // Gentle sway when waiting
+      // Gentle sway when waiting around its initial X position
       this.swayOffset += this.config.balloon.swaySpeed * delta * 0.5
-      this.balloon.x = this.config.width / 2 + 
+      this.balloon.x = this.initialX + 
         Math.sin(this.swayOffset) * (this.config.balloon.swayAmplitude * 0.5)
     }
   }
@@ -118,7 +120,7 @@ export class BalloonController {
   }
 
   resetPosition(): void {
-    this.balloon.x = this.config.width / 2
+    this.balloon.x = this.initialX  // Reset to balloon's original position
     this.balloon.y = this.config.balloon.initialY
     this.balloon.visible = true
     this.balloonSpeed = this.config.balloon.speed

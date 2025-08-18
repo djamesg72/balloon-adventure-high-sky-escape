@@ -142,7 +142,19 @@ export default {
       requestAnimationFrame(gameLoop);
     };
 
-    const landBalloon = () => {
+    const landBalloon1 = () => {
+      if (!isPlaying.value || isLanding.value) return;
+      isLanding.value = true;
+      isPlaying.value = false;
+      gsap.to(balloon.value, {
+        y: app.value.screen.height - 100,
+        duration: 2,
+        ease: "power2.inOut",
+        onComplete: () => {
+          endGame(true);
+        }
+      });
+    const landBalloon2 = () => {
       if (!isPlaying.value || isLanding.value) return;
       isLanding.value = true;
       isPlaying.value = false;

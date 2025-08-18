@@ -1,4 +1,5 @@
 export class RiskCalculator {
+
   static calculateCrashRisk(multiplier: number): number {
     // Target probabilities: 48% reach 2x, 24% reach 4x, 12% reach 8x, etc.
     // This means: 52% crash before 2x, 24% crash between 2x-4x, 12% crash between 4x-8x

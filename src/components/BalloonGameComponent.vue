@@ -12,10 +12,24 @@
         :currentMultiplier="currentMultiplier"
         :timeProgress="timeProgress"
         :countdownSeconds="countdownSeconds"
+        :autoLandEnabled1="autoLandEnabled1"
+        :autoLandMultiplier1="autoLandMultiplier1"
+        :hasLanded1="hasLanded1"
+        :landingMultiplier1="landingMultiplier1"
+        :autoLandEnabled2="autoLandEnabled2"
+        :autoLandMultiplier2="autoLandMultiplier2"
+        :hasLanded2="hasLanded2"
+        :landingMultiplier2="landingMultiplier2"
         :autoLandEnabled="autoLandEnabled"
         :autoLandMultiplier="autoLandMultiplier"
         :hasLanded="hasLanded"
         :landingMultiplier="landingMultiplier"
+        @landNow1="landNow1"
+        @landNow2="landNow2"
+        @toggleAutoLand1="toggleAutoLand1"
+        @toggleAutoLand2="toggleAutoLand2"
+        @updateAutoLandMultiplier1="updateAutoLandMultiplier1"
+        @updateAutoLandMultiplier2="updateAutoLandMultiplier2"
         @landNow="landNow"
         @toggleAutoLand="toggleAutoLand"
         @updateAutoLandMultiplier="updateAutoLandMultiplier"
@@ -44,10 +58,28 @@ const currentMultiplier: Ref<number> = ref(1)
 const finalScore: Ref<number> = ref(0)
 const countdownSeconds: Ref<number> = ref(5)
 const timeProgress: Ref<number> = ref(100)
+
+// Separate state for each balloon
+const hasLanded1: Ref<boolean> = ref(false)
+const hasLanded2: Ref<boolean> = ref(false)
+const landingMultiplier1: Ref<number | undefined> = ref(undefined)
+const landingMultiplier2: Ref<number | undefined> = ref(undefined)
+
+// Legacy state for backward compatibility
 const hasLanded: Ref<boolean> = ref(false)
 const landingMultiplier: Ref<number | undefined> = ref(undefined)
 
-// Auto-land settings
+// Auto-land settings for balloon 1
+const autoLandEnabled1: Ref<boolean> = ref(false)
+const autoLandMultiplier1: Ref<number> = ref(2.0)
+let autoLandTriggered1: boolean = false
+
+// Auto-land settings for balloon 2
+const autoLandEnabled2: Ref<boolean> = ref(false)
+const autoLandMultiplier2: Ref<number> = ref(3.0)
+let autoLandTriggered2: boolean = false
+
+// Legacy auto-land settings
 const autoLandEnabled: Ref<boolean> = ref(false)
 const autoLandMultiplier: Ref<number> = ref(2.0)
 let autoLandTriggered: boolean = false
@@ -158,10 +190,25 @@ const initializeGame = (): void => {
         props.audioManager.setWindIntensity(intensity)
       }
       
-      // Check auto-land conditions - but only if not already triggered this round
+      // Check auto-land conditions for balloon 1
+      if (autoLandEnabled1.value && gameState.value === GameState.PLAYING && !autoLandTriggered1 && !hasLanded1.value) {
+        if (multiplier >= autoLandMultiplier1.value) {
+          autoLandTriggered1 = true // Prevent multiple triggers
+          setTimeout(() => autoLandNow1(multiplier), 500) // Small delay to show the auto-land indicator
+        }
+      }
+      
+      // Check auto-land conditions for balloon 2
+      if (autoLandEnabled2.value && gameState.value === GameState.PLAYING && !autoLandTriggered2 && !hasLanded2.value) {
+        if (multiplier >= autoLandMultiplier2.value) {
+          autoLandTriggered2 = true // Prevent multiple triggers
+          setTimeout(() => autoLandNow2(multiplier), 500) // Small delay to show the auto-land indicator
+        }
+      }
+      
+      // Legacy auto-land check (for backward compatibility)
       if (autoLandEnabled.value && gameState.value === GameState.PLAYING && !autoLandTriggered && !hasLanded.value) {
         if (multiplier >= autoLandMultiplier.value) {
-          // Auto-land triggered
           autoLandTriggered = true // Prevent multiple triggers
           setTimeout(() => autoLandNow(multiplier), 500) // Small delay to show the auto-land indicator
         }
@@ -183,24 +230,51 @@ const initializeGame = (): void => {
       // The round will only end when the balloon crashes
     }
     
-    game.onCrash = (score: number) => {
+    // Add separate landing callbacks for each balloon if they exist
+    if (game.onLand1) {
+      game.onLand1 = (score: number) => {
+        finalScore.value = score
+        hasLanded1.value = true
+        if (landingMultiplier1.value === undefined) {
+          landingMultiplier1.value = currentMultiplier.value
+        }
+        playLandingSound()
+      }
+    }
+    
+    if (game.onLand2) {
+      game.onLand2 = (score: number) => {
+        finalScore.value = score
+        hasLanded2.value = true
+        if (landingMultiplier2.value === undefined) {
+          landingMultiplier2.value = currentMultiplier.value
+        }
+        playLandingSound()
+      }
+    }
+    
+    game.onCrash1 = (score: number) => {
+      console.log('Balloon 1 crashed!')
       // Play balloon pop sound
       playPopSound()
       
-      // Stop wind sound
-      if (props.audioManager) {
-        props.audioManager.setWindIntensity(0)
+      // Check if both balloons have crashed
+      if (game?.hasBalloon1Crashed() && game?.hasBalloon2Crashed()) {
+        // Both balloons crashed - end the game
+        endGameRound(score)
       }
+    }
+    
+    game.onCrash2 = (score: number) => {
+      console.log('Balloon 2 crashed!')
+      // Play balloon pop sound
+      playPopSound()
       
-      // Only crashes end the round
-      finalScore.value = score
-      landingMultiplier.value = undefined // Clear landing multiplier when crashed
-      autoLandTriggered = false // Reset for next round
-      // Start countdown after showing results for 2 seconds
-      setTimeout(() => {
-        gameState.value = GameState.WAITING // Ensure we're in waiting state
-        startCountdown()
-      }, 2000)
+      // Check if both balloons have crashed
+      if (game?.hasBalloon1Crashed() && game?.hasBalloon2Crashed()) {
+        // Both balloons crashed - end the game
+        endGameRound(score)
+      }
     }
     
     // Start initial countdown
@@ -225,6 +299,18 @@ const startGame = (): void => {
     // Reset our component state
     currentScore.value = 0
     currentMultiplier.value = 1
+    
+    // Reset balloon 1 state
+    hasLanded1.value = false
+    landingMultiplier1.value = undefined
+    autoLandTriggered1 = false
+    
+    // Reset balloon 2 state
+    hasLanded2.value = false
+    landingMultiplier2.value = undefined
+    autoLandTriggered2 = false
+    
+    // Reset legacy state
     hasLanded.value = false
     landingMultiplier.value = undefined
     autoLandTriggered = false
@@ -234,9 +320,37 @@ const startGame = (): void => {
   }
 }
 
+const landNow1 = (): void => {
+  if (game && gameState.value === GameState.PLAYING) {
+    game.landBalloon1()
+  }
+}
+
+const landNow2 = (): void => {
+  if (game && gameState.value === GameState.PLAYING) {
+    game.landBalloon2()
+  }
+}
+
 const landNow = (): void => {
   if (game && gameState.value === GameState.PLAYING) {
-    game.landBalloon()
+    game.landBalloon() // Legacy method that lands both
+  }
+}
+
+const autoLandNow1 = (targetMultiplier: number): void => {
+  if (game && gameState.value === GameState.PLAYING && !hasLanded1.value) {
+    // Store the target multiplier before landing
+    landingMultiplier1.value = targetMultiplier
+    game.landBalloon1()
+  }
+}
+
+const autoLandNow2 = (targetMultiplier: number): void => {
+  if (game && gameState.value === GameState.PLAYING && !hasLanded2.value) {
+    // Store the target multiplier before landing
+    landingMultiplier2.value = targetMultiplier
+    game.landBalloon2()
   }
 }
 
@@ -244,17 +358,66 @@ const autoLandNow = (targetMultiplier: number): void => {
   if (game && gameState.value === GameState.PLAYING && !hasLanded.value) {
     // Store the target multiplier before landing
     landingMultiplier.value = targetMultiplier
-    game.landBalloon()
+    game.landBalloon() // Legacy method
   }
 }
 
-// Auto-land methods
+// Auto-land methods for balloon 1
+const toggleAutoLand1 = (): void => {
+  autoLandEnabled1.value = !autoLandEnabled1.value
+}
+
+const updateAutoLandMultiplier1 = (multiplier: number): void => {
+  autoLandMultiplier1.value = Math.max(1.01, multiplier)
+}
+
+// Auto-land methods for balloon 2
+const toggleAutoLand2 = (): void => {
+  autoLandEnabled2.value = !autoLandEnabled2.value
+}
+
+const updateAutoLandMultiplier2 = (multiplier: number): void => {
+  autoLandMultiplier2.value = Math.max(1.01, multiplier)
+}
+
+// Legacy auto-land methods
 const toggleAutoLand = (): void => {
   autoLandEnabled.value = !autoLandEnabled.value
 }
 
 const updateAutoLandMultiplier = (multiplier: number): void => {
   autoLandMultiplier.value = Math.max(1.01, multiplier)
+}
+
+// Game end helper method
+const endGameRound = (score: number): void => {
+  console.log('Both balloons crashed! Ending game round...')
+  
+  // Stop wind sound
+  if (props.audioManager) {
+    props.audioManager.setWindIntensity(0)
+  }
+  
+  // Update final score and reset all states
+  finalScore.value = score
+  
+  // Reset balloon 1 state
+  landingMultiplier1.value = undefined
+  autoLandTriggered1 = false
+  
+  // Reset balloon 2 state
+  landingMultiplier2.value = undefined
+  autoLandTriggered2 = false
+  
+  // Reset legacy state
+  landingMultiplier.value = undefined
+  autoLandTriggered = false
+  
+  // Start countdown after showing results for 2 seconds
+  setTimeout(() => {
+    gameState.value = GameState.WAITING // Ensure we're in waiting state
+    startCountdown()
+  }, 2000)
 }
 
 // Lifecycle hooks

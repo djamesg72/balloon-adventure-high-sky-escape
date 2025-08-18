@@ -9,7 +9,7 @@
     
     <!-- Bottom HUD Panel - Always visible -->
     <div class="bottom-hud">
-      <!-- Timer Bar - Between rounds only -->
+      <!-- Timer Bar - Between rounds only (shared for both betting modules) -->
       <div class="timer-section" v-if="gameState === 'waiting' || gameState === 'crashed' || gameState === 'landed'">
         <div class="timer-message">Next round starting in {{ countdownSeconds }}...</div>
         <div class="timer-bar">
@@ -23,46 +23,96 @@
         </div>
       </div>
       
-      <!-- Auto Land Settings -->
-      <div class="auto-land-section">
-        <div class="auto-land-header">
-          <span>Auto Land</span>
+      <!-- Betting Modules Container -->
+      <div class="betting-modules">
+        <!-- Betting Module 1 -->
+        <div class="betting-module">
+          <!-- Auto Land Settings -->
+          <div class="auto-land-section">
+            <div class="auto-land-header">
+              <span>Auto Land</span>
+              <button 
+                @click="toggleAutoLand1" 
+                :class="['toggle-btn', { active: autoLandEnabled1 }]"
+              >
+                {{ autoLandEnabled1 ? 'ON' : 'OFF' }}
+              </button>
+            </div>
+            
+            <div class="auto-land-controls" v-if="autoLandEnabled1">
+              <div class="control-group">
+                <span class="on-label">ON:</span>
+                <input 
+                  type="number" 
+                  :value="autoLandMultiplier1"
+                  @input="updateAutoLandMultiplier1(($event.target as HTMLInputElement).valueAsNumber)"
+                  min="1.01" 
+                  max="50"
+                  step="0.1"
+                  class="multiplier-input"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <!-- Land Button 1 -->
           <button 
-            @click="toggleAutoLand" 
-            :class="['toggle-btn', { active: autoLandEnabled }]"
+            @click="landNow1" 
+            :disabled="gameState !== 'playing' || hasLanded1"
+            :class="['land-button', { 
+              'auto-triggered': autoLandEnabled1 && shouldAutoLand1,
+              'disabled': gameState !== 'playing' || hasLanded1,
+              'landed': hasLanded1
+            }]"
           >
-            {{ autoLandEnabled ? 'ON' : 'OFF' }}
+            {{ hasLanded1 && landingMultiplier1 ? `✅ LANDED AT ${landingMultiplier1.toFixed(2)}x!` : (hasLanded1 ? '✅ LANDED SAFELY!' : (autoLandEnabled1 && shouldAutoLand1 ? '🤖 AUTO LANDING' : '🪂 LAND NOW')) }}
           </button>
         </div>
-        
-        <div class="auto-land-controls" v-if="autoLandEnabled">
-          <div class="control-group">
-            <span class="on-label">ON:</span>
-            <input 
-              type="number" 
-              :value="autoLandMultiplier"
-              @input="updateAutoLandMultiplier(($event.target as HTMLInputElement).valueAsNumber)"
-              min="1.01" 
-              max="50"
-              step="0.1"
-              class="multiplier-input"
-            />
+
+        <!-- Betting Module 2 -->
+        <div class="betting-module">
+          <!-- Auto Land Settings -->
+          <div class="auto-land-section">
+            <div class="auto-land-header">
+              <span>Auto Land</span>
+              <button 
+                @click="toggleAutoLand2" 
+                :class="['toggle-btn', { active: autoLandEnabled2 }]"
+              >
+                {{ autoLandEnabled2 ? 'ON' : 'OFF' }}
+              </button>
+            </div>
+            
+            <div class="auto-land-controls" v-if="autoLandEnabled2">
+              <div class="control-group">
+                <span class="on-label">ON:</span>
+                <input 
+                  type="number" 
+                  :value="autoLandMultiplier2"
+                  @input="updateAutoLandMultiplier2(($event.target as HTMLInputElement).valueAsNumber)"
+                  min="1.01" 
+                  max="50"
+                  step="0.1"
+                  class="multiplier-input"
+                />
+              </div>
+            </div>
           </div>
+          
+          <!-- Land Button 2 -->
+          <button 
+            @click="landNow2" 
+            :disabled="gameState !== 'playing' || hasLanded2"
+            :class="['land-button', { 
+              'auto-triggered': autoLandEnabled2 && shouldAutoLand2,
+              'disabled': gameState !== 'playing' || hasLanded2,
+              'landed': hasLanded2
+            }]"
+          >
+            {{ hasLanded2 && landingMultiplier2 ? `✅ LANDED AT ${landingMultiplier2.toFixed(2)}x!` : (hasLanded2 ? '✅ LANDED SAFELY!' : (autoLandEnabled2 && shouldAutoLand2 ? '🤖 AUTO LANDING' : '🪂 LAND NOW')) }}
+          </button>
         </div>
       </div>
-      
-      <!-- Land Button -->
-      <button 
-        @click="landNow" 
-        :disabled="gameState !== 'playing' || hasLanded"
-        :class="['land-button', { 
-          'auto-triggered': autoLandEnabled && shouldAutoLand,
-          'disabled': gameState !== 'playing' || hasLanded,
-          'landed': hasLanded
-        }]"
-      >
-        {{ hasLanded && landingMultiplier ? `✅ LANDED AT ${landingMultiplier.toFixed(2)}x!` : (hasLanded ? '✅ LANDED SAFELY!' : (autoLandEnabled && shouldAutoLand ? '🤖 AUTO LANDING' : '🪂 LAND NOW')) }}
-      </button>
     </div>
   </div>
 </template>
@@ -93,6 +143,41 @@ const props = defineProps({
     type: Number,
     default: 5
   },
+  // Betting Module 1 props
+  autoLandEnabled1: {
+    type: Boolean,
+    default: false
+  },
+  autoLandMultiplier1: {
+    type: Number,
+    default: 2.0
+  },
+  hasLanded1: {
+    type: Boolean,
+    default: false
+  },
+  landingMultiplier1: {
+    type: Number,
+    default: null
+  },
+  // Betting Module 2 props
+  autoLandEnabled2: {
+    type: Boolean,
+    default: false
+  },
+  autoLandMultiplier2: {
+    type: Number,
+    default: 3.0
+  },
+  hasLanded2: {
+    type: Boolean,
+    default: false
+  },
+  landingMultiplier2: {
+    type: Number,
+    default: null
+  },
+  // Legacy props for backward compatibility
   autoLandEnabled: {
     type: Boolean,
     default: false
@@ -113,12 +198,29 @@ const props = defineProps({
 
 // Emits
 const emit = defineEmits<{
+  // Betting Module 1
+  landNow1: []
+  toggleAutoLand1: []
+  updateAutoLandMultiplier1: [multiplier: number]
+  // Betting Module 2
+  landNow2: []
+  toggleAutoLand2: []
+  updateAutoLandMultiplier2: [multiplier: number]
+  // Legacy events for backward compatibility
   landNow: []
   toggleAutoLand: []
   updateAutoLandMultiplier: [multiplier: number]
 }>()
 
 // Computed properties
+const shouldAutoLand1 = computed(() => {
+  return props.autoLandEnabled1 && props.currentMultiplier >= props.autoLandMultiplier1
+})
+
+const shouldAutoLand2 = computed(() => {
+  return props.autoLandEnabled2 && props.currentMultiplier >= props.autoLandMultiplier2
+})
+
 const shouldAutoLand = computed(() => {
   return props.autoLandEnabled && props.currentMultiplier >= props.autoLandMultiplier
 })
@@ -126,6 +228,35 @@ const shouldAutoLand = computed(() => {
 // No longer watching for auto-land trigger here - moved to backend for better control
 
 // Methods
+const landNow1 = () => {
+  emit('landNow1')
+}
+
+const toggleAutoLand1 = () => {
+  emit('toggleAutoLand1')
+}
+
+const updateAutoLandMultiplier1 = (multiplier: number) => {
+  if (!isNaN(multiplier) && multiplier >= 1.01) {
+    emit('updateAutoLandMultiplier1', multiplier)
+  }
+}
+
+const landNow2 = () => {
+  emit('landNow2')
+}
+
+const toggleAutoLand2 = () => {
+  emit('toggleAutoLand2')
+}
+
+const updateAutoLandMultiplier2 = (multiplier: number) => {
+  if (!isNaN(multiplier) && multiplier >= 1.01) {
+    emit('updateAutoLandMultiplier2', multiplier)
+  }
+}
+
+// Legacy methods for backward compatibility
 const landNow = () => {
   emit('landNow')
 }
@@ -235,6 +366,47 @@ const getTimerColor = (): string => {
   display: flex;
   flex-direction: column;
   gap: 15px;
+}
+
+/* Betting Modules Container */
+.betting-modules {
+  display: flex;
+  gap: 20px;
+  width: 100%;
+}
+
+.betting-module {
+  flex: 1;
+  background: rgba(40, 40, 60, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.module-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.module-title {
+  font-size: 1.1em;
+  font-weight: bold;
+  color: #ffffff;
+}
+
+.bet-amount {
+  font-size: 1em;
+  font-weight: bold;
+  color: #64ffda;
+  background: rgba(100, 255, 218, 0.1);
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 
 /* Timer Section - Between rounds */
@@ -460,6 +632,11 @@ const getTimerColor = (): string => {
     right: 10px;
   }
   
+  .betting-modules {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
   .land-button {
     font-size: 1.2em;
     padding: 15px 30px;
@@ -490,6 +667,18 @@ const getTimerColor = (): string => {
   
   .bottom-hud {
     padding: 15px;
+  }
+  
+  .betting-module {
+    padding: 12px;
+  }
+  
+  .module-title {
+    font-size: 1em;
+  }
+  
+  .bet-amount {
+    font-size: 0.9em;
   }
 }
 </style>

@@ -28,8 +28,11 @@ export class AudioManager {
     const savedVolume = localStorage.getItem('balloon-game-volume')
     if (savedVolume) this.masterVolume = parseFloat(savedVolume)
 
-    const savedMuted = localStorage.getItem('balloon-game-muted')
-    if (savedMuted) this.muted = savedMuted === 'true'
+    // Temporarily disable sounds
+    this.muted = true
+    
+    // const savedMuted = localStorage.getItem('balloon-game-muted')
+    // if (savedMuted) this.muted = savedMuted === 'true'
 
     // No preloading - sounds will be created on demand
   }
